@@ -29,7 +29,7 @@ A headless, high-performance React data grid built specifically to end the miser
 
 ### Phase 4: Launch & Portfolio
 - [x] Build the **SpiteExpress Landing Page**.
-- [ ] Create a "DevExpress vs SpiteExpress" styling demo (The "Spite-off").
+- [x] Create a "DevExpress vs SpiteExpress" styling demo (The "Spite-off").
 - [ ] Deploy to Portfolio.
 
 ## Server-Side Strategy
