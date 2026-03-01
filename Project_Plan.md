@@ -14,7 +14,7 @@ A headless, high-performance React data grid built specifically to end the miser
 
 ### Phase 1: The Foundation (Scaffolding)
 - [x] Initialize Monorepo (Turborepo + Vite + TypeScript).
-- [ ] Implement `useSpiteGrid` core state (Sorting, Filtering logic).
+- [x] Implement `useSpiteGrid` core state (Sorting, Filtering logic).
 - [ ] Build the Virtualization Engine (Row/Column).
 
 ### Phase 2: Feature Parity (The Spite List)
