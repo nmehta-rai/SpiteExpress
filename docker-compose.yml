@@ -1,0 +1,12 @@
+version: '3.8'
+services:
+  spiteexpress:
+    build: .
+    container_name: spiteexpress
+    restart: unless-stopped
+    networks:
+      - proxy-net
+
+networks:
+  proxy-net:
+    external: true

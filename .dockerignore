@@ -1,0 +1,9 @@
+node_modules
+apps/web
+apps/docs
+apps/demo
+packages
+.git
+.claude
+*.md
+deploy.sh
