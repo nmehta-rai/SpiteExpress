@@ -28,7 +28,7 @@ A headless, high-performance React data grid built specifically to end the miser
 - [ ] **Command API:** Let LLMs steer the grid ("Sort by price then filter where stock < 10").
 
 ### Phase 4: Launch & Portfolio
-- [ ] Build the **SpiteExpress Landing Page**.
+- [x] Build the **SpiteExpress Landing Page**.
 - [ ] Create a "DevExpress vs SpiteExpress" styling demo (The "Spite-off").
 - [ ] Deploy to Portfolio.
 
