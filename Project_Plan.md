@@ -34,8 +34,8 @@ A headless, high-performance React data grid built specifically to end the miser
 
 ### Phase 5: The "Spite" Polish (Advanced Features)
 - [x] **Cell-Level Editing:** High-performance optimistic updates for data-entry heavy grids.
-- [ ] **Real-Time Collaboration:** Synchronized grid states via Y.js or Replicache.
-- [ ] **The "Vibe-Check" Console:** A developer overlay to debug grid state and LLM intent.
+- [x] **Real-Time Collaboration:** Synchronized grid states via Y.js or Replicache.
+- [x] **The "Vibe-Check" Console:** A developer overlay to debug grid state and LLM intent.
 - [ ] **Multi-Backend Adapter:** Native support for Prisma/Mongo with zero-config query translation.
 
 ## Server-Side Strategy
