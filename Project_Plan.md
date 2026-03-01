@@ -18,8 +18,8 @@ A headless, high-performance React data grid built specifically to end the miser
 - [x] Build the Virtualization Engine (Row/Column).
 
 ### Phase 2: Feature Parity (The Spite List)
-- [ ] **Remote Data Handling:** Universal adapter for server-side pagination/filtering/sorting/grouping. (A massive pain point in DevExpress).
-- [ ] **Grouping & Aggregation:** Master-detail views and multi-level grouping.
+- [x] **Remote Data Handling:** Universal adapter for server-side pagination/filtering/sorting/grouping. (A massive pain point in DevExpress).
+- [x] **Grouping & Aggregation:** Master-detail views and multi-level grouping.
 - [ ] **Filter Builder:** A standalone headless component for complex query building.
 - [ ] **Export Engine:** Native PDF/Excel export (Worker-based for performance).
 
