@@ -1,30 +1,22 @@
-export type GridCommand = 
-  | { type: 'SORT'; field: string; direction: 'asc' | 'desc' }
-  | { type: 'FILTER'; field: string; operator: string; value: any }
-  | { type: 'PAGE'; index: number }
-  | { type: 'EXPORT'; format: 'pdf' | 'excel' | 'csv' };
+export type SpiteCommand = {
+  action: 'sort' | 'filter' | 'page' | 'group';
+  payload: any;
+};
 
 export class CommandAPI {
-  static execute(command: GridCommand, store: any) {
-    switch (command.type) {
-      case 'SORT':
-        store.setSorting([{ id: command.field, desc: command.direction === 'desc' }]);
-        break;
-      case 'FILTER':
-        store.setFiltering([{ id: command.field, value: command.value }]);
-        break;
-      case 'PAGE':
-        // Pagination logic here
-        break;
-      case 'EXPORT':
-        // Trigger export engine
-        break;
-    }
+  static parse(naturalLanguage: string): SpiteCommand[] {
+    // In a real implementation, this would call an LLM to parse intent.
+    // Mocking a response for the demo.
+    console.log(`Parsing command: ${naturalLanguage}`);
+    return [
+      { action: 'sort', payload: { field: 'price', direction: 'desc' } }
+    ];
   }
 
-  static parseAndExecute(input: string, store: any) {
-    // In a real implementation, this would involve a lightweight LLM
-    // or regex parser to map natural language to GridCommands.
-    console.log('Parsing and executing command:', input);
+  static execute(commands: SpiteCommand[], store: any) {
+    commands.forEach(cmd => {
+      if (cmd.action === 'sort') store.setSorting([cmd.payload]);
+      // ... handle others
+    });
   }
 }
