@@ -32,6 +32,12 @@ A headless, high-performance React data grid built specifically to end the miser
 - [x] Create a "DevExpress vs SpiteExpress" styling demo (The "Spite-off").
 - [x] Deploy to Portfolio.
 
+### Phase 5: The "Spite" Polish (Advanced Features)
+- [x] **Cell-Level Editing:** High-performance optimistic updates for data-entry heavy grids.
+- [ ] **Real-Time Collaboration:** Synchronized grid states via Y.js or Replicache.
+- [ ] **The "Vibe-Check" Console:** A developer overlay to debug grid state and LLM intent.
+- [ ] **Multi-Backend Adapter:** Native support for Prisma/Mongo with zero-config query translation.
+
 ## Server-Side Strategy
 Instead of complex configurations, SpiteExpress uses a **Protocol-First** approach. We define a standard JSON structure for "Grid State" (filters, sorts, pages) and provide a lightweight backend utility to translate that state into SQL/Prisma/Mongo queries automatically.
 
