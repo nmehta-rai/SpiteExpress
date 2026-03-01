@@ -20,17 +20,17 @@ A headless, high-performance React data grid built specifically to end the miser
 ### Phase 2: Feature Parity (The Spite List)
 - [x] **Remote Data Handling:** Universal adapter for server-side pagination/filtering/sorting/grouping. (A massive pain point in DevExpress).
 - [x] **Grouping & Aggregation:** Master-detail views and multi-level grouping.
-- [ ] **Filter Builder:** A standalone headless component for complex query building.
-- [ ] **Export Engine:** Native PDF/Excel export (Worker-based for performance).
+- [x] **Filter Builder:** A standalone headless component for complex query building.
+- [x] **Export Engine:** Native PDF/Excel export (Worker-based for performance).
 
 ### Phase 3: The "Vibe Coding" Layer
-- [ ] **AI-Friendly Manifest:** Schema-first design that helps AI models understand the grid structure.
-- [ ] **Command API:** Let LLMs steer the grid ("Sort by price then filter where stock < 10").
+- [x] **AI-Friendly Manifest:** Schema-first design that helps AI models understand the grid structure.
+- [x] **Command API:** Let LLMs steer the grid ("Sort by price then filter where stock < 10").
 
 ### Phase 4: Launch & Portfolio
 - [x] Build the **SpiteExpress Landing Page**.
 - [x] Create a "DevExpress vs SpiteExpress" styling demo (The "Spite-off").
-- [ ] Deploy to Portfolio.
+- [x] Deploy to Portfolio.
 
 ## Server-Side Strategy
 Instead of complex configurations, SpiteExpress uses a **Protocol-First** approach. We define a standard JSON structure for "Grid State" (filters, sorts, pages) and provide a lightweight backend utility to translate that state into SQL/Prisma/Mongo queries automatically.
