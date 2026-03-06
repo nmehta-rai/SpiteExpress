@@ -6,6 +6,9 @@ import { supabase } from './src/lib/supabase';
 
 const PAGE_SIZE_PRESETS = [10, 15, 25, 50];
 
+// Text columns that support ilike (enums & numerics excluded)
+const SEARCH_COLS: (keyof Order)[] = ['customer_name', 'customer_id', 'email', 'sku', 'shipping_address'];
+
 type ColDef = {
   id: keyof Order;
   label: string;
@@ -62,17 +65,73 @@ function useDebounce<T>(value: T, ms: number): T {
   return d;
 }
 
+/** Wrap matched portions of text in <mark> styled like a browser text selection */
+function hl(text: string, term: string): React.ReactNode {
+  if (!term.trim()) return text;
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+  if (parts.length === 1) return text;
+  return (
+    <>
+      {parts.map((p, i) =>
+        i % 2 === 1
+          ? <mark key={i} className="bg-[#3b82f6]/30 dark:bg-[#3b82f6]/40 text-inherit rounded-[2px] px-0">{p}</mark>
+          : p
+      )}
+    </>
+  );
+}
+
+// ─── Group display rows ───────────────────────────────────────────────────────
+
+type DataRow  = { type: 'data';  row: Order; idx: number };
+type GroupRow = { type: 'group'; colId: keyof Order; value: string; count: number; key: string };
+type DisplayRow = DataRow | GroupRow;
+
+function buildDisplayRows(
+  rows: Order[],
+  groupBy: (keyof Order)[],
+  collapsed: Set<string>
+): DisplayRow[] {
+  if (groupBy.length === 0) return rows.map((row, idx) => ({ type: 'data', row, idx }));
+
+  const result: DisplayRow[] = [];
+  let dataIdx = 0;
+  let lastKey = '';
+
+  // count per group key
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const k = groupBy.map(g => String((row as Record<string, unknown>)[g] ?? '')).join('\x00');
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+
+  for (const row of rows) {
+    const key = groupBy.map(g => String((row as Record<string, unknown>)[g] ?? '')).join('\x00');
+    if (key !== lastKey) {
+      lastKey = key;
+      result.push({
+        type: 'group',
+        colId: groupBy[0],
+        value: String((row as Record<string, unknown>)[groupBy[0]] ?? ''),
+        count: counts.get(key) ?? 0,
+        key,
+      });
+    }
+    if (!collapsed.has(key)) {
+      result.push({ type: 'data', row, idx: dataIdx++ });
+    }
+  }
+  return result;
+}
+
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
-function SunIcon() {
-  return <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>;
-}
-function MoonIcon() {
-  return <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>;
-}
-function ColumnsIcon() {
-  return <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="18" rx="1"/></svg>;
-}
+const SunIcon = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>;
+const MoonIcon = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>;
+const ColumnsIcon = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="18" rx="1"/></svg>;
+const ChevronRight = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>;
+const ChevronDown = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>;
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 
@@ -82,8 +141,7 @@ export default function App() {
   const [dark, setDark] = useState(() => {
     const saved = localStorage.getItem('se-theme');
     const isDark = saved ? saved === 'dark' : true;
-    if (isDark) document.documentElement.classList.add('dark');
-    else document.documentElement.classList.remove('dark');
+    isDark ? document.documentElement.classList.add('dark') : document.documentElement.classList.remove('dark');
     return isDark;
   });
   useEffect(() => {
@@ -108,115 +166,146 @@ export default function App() {
     const c = Math.min(500, Math.max(1, n));
     setPageSizeRaw(c); setPSInput(String(c)); setPage(0);
   };
-  const debouncedSearch = useDebounce(search, 350);
+  const debouncedSearch = useDebounce(search, 400);
 
   // ── Column state ───────────────────────────────────────────────────────────
   const [colOrder, setColOrder]   = useState<(keyof Order)[]>(COLUMNS.map(c => c.id));
   const [colWidths, setColWidths] = useState<Record<string, number>>(
     Object.fromEntries(COLUMNS.map(c => [c.id, c.defaultWidth]))
   );
-  const [visibleCols, setVisibleCols] = useState<Set<keyof Order>>(
-    new Set(COLUMNS.map(c => c.id))
-  );
+  const [visibleCols, setVisibleCols] = useState<Set<keyof Order>>(new Set(COLUMNS.map(c => c.id)));
   const [showChooser, setShowChooser] = useState(false);
   const chooserRef = useRef<HTMLDivElement>(null);
 
-  // Derived: ordered visible columns
-  const activeCols = colOrder.filter(id => visibleCols.has(id)).map(id => COL_MAP[id]);
+  // ── Grouping state ─────────────────────────────────────────────────────────
+  const [groupBy, setGroupBy]     = useState<(keyof Order)[]>([]);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [panelDragOver, setPanelDragOver] = useState(false);
 
-  // Close chooser on outside click
+  // Grouped columns are hidden from the grid (DevExpress default)
+  const activeCols: ColDef[] = colOrder.filter(id => visibleCols.has(id) && !groupBy.includes(id)).map(id => COL_MAP[id]);
+
+  // ── Close chooser on outside click ─────────────────────────────────────────
   useEffect(() => {
     if (!showChooser) return;
-    const handler = (e: MouseEvent) => {
+    const h = (e: MouseEvent) => {
       if (chooserRef.current && !chooserRef.current.contains(e.target as Node)) setShowChooser(false);
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
   }, [showChooser]);
 
   // ── Column resize ──────────────────────────────────────────────────────────
   const resizeState = useRef<{ colId: string; startX: number; startWidth: number } | null>(null);
 
   const startResize = (e: React.MouseEvent, colId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
     resizeState.current = { colId, startX: e.clientX, startWidth: colWidths[colId] };
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
   };
-
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (!resizeState.current) return;
       const { colId, startX, startWidth } = resizeState.current;
-      const newWidth = Math.max(40, startWidth + (e.clientX - startX));
-      setColWidths(prev => ({ ...prev, [colId]: newWidth }));
+      setColWidths(prev => ({ ...prev, [colId]: Math.max(40, startWidth + e.clientX - startX) }));
     };
-    const onUp = () => {
-      resizeState.current = null;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
+    const onUp = () => { resizeState.current = null; document.body.style.cursor = ''; document.body.style.userSelect = ''; };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
     return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
   }, []);
 
-  // ── Column reorder (drag & drop) ───────────────────────────────────────────
-  const [dragColId, setDragColId]       = useState<string | null>(null);
+  // ── Column drag & drop (reorder + group) ──────────────────────────────────
+  const [dragColId, setDragColId]         = useState<string | null>(null);
   const [dragOverColId, setDragOverColId] = useState<string | null>(null);
 
-  const onDragStart = (e: React.DragEvent, colId: string) => {
+  const onColDragStart = (e: React.DragEvent, colId: string) => {
     setDragColId(colId);
     e.dataTransfer.effectAllowed = 'move';
   };
-  const onDragOver = (e: React.DragEvent, colId: string) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
+  const onColDragOver = (e: React.DragEvent, colId: string) => {
+    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
     if (colId !== dragColId) setDragOverColId(colId);
   };
-  const onDrop = (e: React.DragEvent, targetColId: string) => {
+  const onColDrop = (e: React.DragEvent, targetColId: string) => {
     e.preventDefault();
     if (!dragColId || dragColId === targetColId) { setDragColId(null); setDragOverColId(null); return; }
     setColOrder(prev => {
       const arr = [...prev];
       const from = arr.indexOf(dragColId as keyof Order);
       const to   = arr.indexOf(targetColId as keyof Order);
-      arr.splice(from, 1);
-      arr.splice(to, 0, dragColId as keyof Order);
+      arr.splice(from, 1); arr.splice(to, 0, dragColId as keyof Order);
       return arr;
     });
-    setDragColId(null);
-    setDragOverColId(null);
+    setDragColId(null); setDragOverColId(null);
   };
-  const onDragEnd = () => { setDragColId(null); setDragOverColId(null); };
+  const onColDragEnd = () => { setDragColId(null); setDragOverColId(null); setPanelDragOver(false); };
+
+  // Drop onto group panel
+  const onPanelDragOver = (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setPanelDragOver(true); };
+  const onPanelDragLeave = () => setPanelDragOver(false);
+  const onPanelDrop = (e: React.DragEvent) => {
+    e.preventDefault(); setPanelDragOver(false);
+    if (!dragColId) return;
+    const colId = dragColId as keyof Order;
+    setDragColId(null);
+    if (groupBy.includes(colId)) return; // already grouped
+    setGroupBy(prev => [...prev, colId]);
+  };
+
+  const removeGroup = (colId: keyof Order) => {
+    setGroupBy(prev => prev.filter(g => g !== colId));
+    setCollapsed(new Set()); // clear collapse state when removing a group
+  };
+
+  const toggleCollapse = (key: string) => {
+    setCollapsed(prev => {
+      const s = new Set(prev);
+      s.has(key) ? s.delete(key) : s.add(key);
+      return s;
+    });
+  };
 
   // ── GraphQL fetch ──────────────────────────────────────────────────────────
   const fetchPage = useCallback(async () => {
     setLoading(true);
     try {
-      const filter: Record<string, unknown> = {};
-      if (debouncedSearch) filter.customer_name = { ilike: `%${debouncedSearch}%` };
+      // Build OR filter across all searchable text columns
+      let filter: Record<string, unknown> | undefined;
+      if (debouncedSearch.trim()) {
+        filter = {
+          or: SEARCH_COLS.map(col => ({ [col]: { ilike: `%${debouncedSearch.trim()}%` } })),
+        };
+      }
+
+      // Group columns sort first, then user sort
+      const orderBy = [
+        ...groupBy.map(g => ({ [g]: 'AscNullsLast' })),
+        { [sortCol]: sortDir },
+      ];
+
       const vars = {
         first:   pageSize,
         offset:  page * pageSize,
-        orderBy: [{ [sortCol]: sortDir }],
-        ...(Object.keys(filter).length ? { filter } : {}),
+        orderBy,
+        ...(filter ? { filter } : {}),
       };
+
       const data = await gqlClient.request<OrdersQueryResult>(ORDERS_QUERY, vars);
       setRows(data.ordersCollection.edges.map(e => e.node));
       setTotal(data.ordersCollection.totalCount);
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, debouncedSearch, sortCol, sortDir]);
+  }, [page, pageSize, debouncedSearch, sortCol, sortDir, groupBy]);
 
   useEffect(() => { fetchPage(); }, [fetchPage]);
-  useEffect(() => { setPage(0); }, [debouncedSearch, sortCol, sortDir, pageSize]);
+  useEffect(() => { setPage(0); }, [debouncedSearch, sortCol, sortDir, pageSize, groupBy]);
 
   // ── Supabase Realtime ──────────────────────────────────────────────────────
   useEffect(() => {
-    const channel = supabase.channel('orders-live')
+    const ch = supabase.channel('orders-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
         setLiveCount(c => c + 1);
         const id = (payload.new as Order | undefined)?.transaction_id ?? (payload.old as Order | undefined)?.transaction_id;
@@ -226,15 +315,13 @@ export default function App() {
         }
         fetchPage();
       }).subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { supabase.removeChannel(ch); };
   }, [fetchPage]);
 
   // ── Inline editing ─────────────────────────────────────────────────────────
-  const editingRef = useRef<{ id: string; field: keyof Order } | null>(null);
   const [editingCell, setEditingCell] = useState<{ id: string; field: keyof Order } | null>(null);
-
   const commitEdit = async (id: string, field: keyof Order, raw: string) => {
-    setEditingCell(null); editingRef.current = null;
+    setEditingCell(null);
     let value: string | number | boolean = raw;
     if (field === 'quantity')     value = parseInt(raw, 10);
     if (field === 'unit_price')   value = parseFloat(raw);
@@ -270,73 +357,67 @@ export default function App() {
   };
 
   // ── Cell renderer ──────────────────────────────────────────────────────────
+  const term = debouncedSearch.trim();
   const renderCell = (row: Order, col: ColDef) => {
-    const cellBase = 'px-3 py-2 overflow-hidden text-ellipsis whitespace-nowrap';
-    const align = col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : '';
+    const base = 'px-3 py-2 overflow-hidden text-ellipsis whitespace-nowrap';
+    const a = col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : '';
+
+    const hlText = (val: string) => hl(val, term);
 
     switch (col.id) {
       case 'customer_name':
-        return <td key={col.id} className={`${cellBase} ${align} text-gray-800 dark:text-gray-200`}>{row.customer_name}</td>;
+        return <td key={col.id} className={`${base} ${a} text-gray-800 dark:text-gray-200`}>{hlText(row.customer_name)}</td>;
       case 'order_date':
-        return <td key={col.id} className={`${cellBase} ${align} text-gray-500 dark:text-gray-400`}>{fmtDate(row.order_date)}</td>;
+        return <td key={col.id} className={`${base} ${a} text-gray-500 dark:text-gray-400`}>{fmtDate(row.order_date)}</td>;
       case 'product_category':
-        return <td key={col.id} className={`${cellBase} ${align} ${CATEGORY_STYLES[row.product_category] ?? 'text-gray-600 dark:text-gray-300'}`}>{row.product_category}</td>;
+        return <td key={col.id} className={`${base} ${a} ${CATEGORY_STYLES[row.product_category] ?? 'text-gray-600 dark:text-gray-300'}`}>{row.product_category}</td>;
       case 'sku':
-        return <td key={col.id} className={`${cellBase} ${align} text-gray-400 dark:text-gray-500 font-mono text-[11px]`}>{row.sku}</td>;
+        return <td key={col.id} className={`${base} ${a} text-gray-400 dark:text-gray-500 font-mono text-[11px]`}>{hlText(row.sku)}</td>;
       case 'quantity':
-        return (
-          <EditableCell key={col.id} align="right"
-            value={String(row.quantity)}
-            editing={editingCell?.id === row.transaction_id && editingCell.field === 'quantity'}
-            onDoubleClick={() => setEditingCell({ id: row.transaction_id, field: 'quantity' })}
-            onCommit={v => commitEdit(row.transaction_id, 'quantity', v)}
-            onCancel={() => setEditingCell(null)} />
-        );
+        return <EditableCell key={col.id} align="right" value={String(row.quantity)}
+          editing={editingCell?.id === row.transaction_id && editingCell.field === 'quantity'}
+          onDoubleClick={() => setEditingCell({ id: row.transaction_id, field: 'quantity' })}
+          onCommit={v => commitEdit(row.transaction_id, 'quantity', v)}
+          onCancel={() => setEditingCell(null)} />;
       case 'unit_price':
-        return (
-          <EditableCell key={col.id} align="right"
-            value={fmt(row.unit_price)} rawValue={String(row.unit_price)}
-            editing={editingCell?.id === row.transaction_id && editingCell.field === 'unit_price'}
-            onDoubleClick={() => setEditingCell({ id: row.transaction_id, field: 'unit_price' })}
-            onCommit={v => commitEdit(row.transaction_id, 'unit_price', v)}
-            onCancel={() => setEditingCell(null)} />
-        );
+        return <EditableCell key={col.id} align="right" value={fmt(row.unit_price)} rawValue={String(row.unit_price)}
+          editing={editingCell?.id === row.transaction_id && editingCell.field === 'unit_price'}
+          onDoubleClick={() => setEditingCell({ id: row.transaction_id, field: 'unit_price' })}
+          onCommit={v => commitEdit(row.transaction_id, 'unit_price', v)}
+          onCancel={() => setEditingCell(null)} />;
       case 'total_amount':
-        return <td key={col.id} className={`${cellBase} ${align} text-gray-600 dark:text-gray-300`}>{fmt(row.total_amount)}</td>;
+        return <td key={col.id} className={`${base} ${a} text-gray-600 dark:text-gray-300`}>{fmt(row.total_amount)}</td>;
       case 'payment_method':
-        return <td key={col.id} className={`${cellBase} ${align} text-gray-500 dark:text-gray-400`}>{row.payment_method}</td>;
+        return <td key={col.id} className={`${base} ${a} text-gray-500 dark:text-gray-400`}>{hlText(row.payment_method)}</td>;
       case 'discount_applied':
-        return (
-          <td key={col.id} className={`${cellBase} ${align}`}>
-            {row.discount_applied ? <span className="text-green-600 dark:text-green-400">✓</span> : <span className="text-gray-300 dark:text-gray-700">—</span>}
-          </td>
-        );
+        return <td key={col.id} className={`${base} ${a}`}>
+          {row.discount_applied ? <span className="text-green-600 dark:text-green-400">✓</span> : <span className="text-gray-300 dark:text-gray-700">—</span>}
+        </td>;
       case 'order_status':
-        return (
-          <td key={col.id} className={`${cellBase} ${align}`}>
-            {editingCell?.id === row.transaction_id && editingCell.field === 'order_status' ? (
-              <select autoFocus defaultValue={row.order_status}
-                className="bg-white dark:bg-[#1a1a24] border border-red-400 dark:border-red-500/50 text-gray-900 dark:text-white text-xs rounded px-1 py-0.5 focus:outline-none"
-                onBlur={e => commitEdit(row.transaction_id, 'order_status', e.target.value)}
-                onChange={e => commitEdit(row.transaction_id, 'order_status', e.target.value)}>
-                {['Delivered', 'Shipped', 'Processing', 'Pending', 'Cancelled'].map(s => <option key={s}>{s}</option>)}
-              </select>
-            ) : (
-              <span className={`px-2 py-0.5 rounded text-[11px] cursor-pointer ${STATUS_STYLES[row.order_status] ?? ''}`}
-                onDoubleClick={() => setEditingCell({ id: row.transaction_id, field: 'order_status' })}
-                title="Double-click to edit">
-                {row.order_status}
-              </span>
-            )}
-          </td>
-        );
+        return <td key={col.id} className={`${base} ${a}`}>
+          {editingCell?.id === row.transaction_id && editingCell.field === 'order_status' ? (
+            <select autoFocus defaultValue={row.order_status}
+              className="bg-white dark:bg-[#1a1a24] border border-red-400 dark:border-red-500/50 text-gray-900 dark:text-white text-xs rounded px-1 py-0.5 focus:outline-none"
+              onBlur={e => commitEdit(row.transaction_id, 'order_status', e.target.value)}
+              onChange={e => commitEdit(row.transaction_id, 'order_status', e.target.value)}>
+              {['Delivered', 'Shipped', 'Processing', 'Pending', 'Cancelled'].map(s => <option key={s}>{s}</option>)}
+            </select>
+          ) : (
+            <span className={`px-2 py-0.5 rounded text-[11px] cursor-pointer ${STATUS_STYLES[row.order_status] ?? ''}`}
+              onDoubleClick={() => setEditingCell({ id: row.transaction_id, field: 'order_status' })}
+              title="Double-click to edit">
+              {row.order_status}
+            </span>
+          )}
+        </td>;
       default:
-        return <td key={col.id} className={`${cellBase} ${align} text-gray-500 dark:text-gray-400`}>{String((row as Record<string, unknown>)[col.id] ?? '')}</td>;
+        return <td key={col.id} className={`${base} ${a} text-gray-500 dark:text-gray-400`}>{String((row as Record<string, unknown>)[col.id] ?? '')}</td>;
     }
   };
 
-  // ── Table width ────────────────────────────────────────────────────────────
-  const tableWidth = activeCols.reduce((sum, c) => sum + colWidths[c.id], 0);
+  // ── Derived display rows ───────────────────────────────────────────────────
+  const displayRows = buildDisplayRows(rows, groupBy, collapsed);
+  const tableWidth = activeCols.reduce((s, c) => s + colWidths[c.id], 0);
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -368,54 +449,33 @@ export default function App() {
 
       {/* Toolbar */}
       <div className="px-6 py-2.5 border-b border-gray-200 dark:border-gray-800/50 bg-white dark:bg-[#08080f] flex items-center gap-2 shrink-0">
-
         {/* Column chooser */}
         <div className="relative" ref={chooserRef}>
-          <button
-            onClick={() => setShowChooser(v => !v)}
-            className={[
-              'flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded border transition-colors',
+          <button onClick={() => setShowChooser(v => !v)}
+            className={['flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded border',
               showChooser
                 ? 'bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-700 text-red-600 dark:text-red-300'
                 : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:border-gray-400 dark:hover:border-gray-500',
-            ].join(' ')}
-            title="Choose columns"
-          >
+            ].join(' ')}>
             <ColumnsIcon />
             Columns
-            <span className="text-gray-400 dark:text-gray-600 ml-0.5">
-              {visibleCols.size}/{COLUMNS.length}
-            </span>
+            <span className="text-gray-400 dark:text-gray-600 ml-0.5">{visibleCols.size}/{COLUMNS.length}</span>
           </button>
-
           {showChooser && (
             <div className="absolute left-0 top-full mt-1 z-50 w-48 bg-white dark:bg-[#111118] border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1">
-              <div className="px-3 py-1.5 text-[10px] text-gray-400 dark:text-gray-600 uppercase tracking-wider border-b border-gray-100 dark:border-gray-800 mb-1">
-                Show / hide columns
-              </div>
+              <div className="px-3 py-1.5 text-[10px] text-gray-400 dark:text-gray-600 uppercase tracking-wider border-b border-gray-100 dark:border-gray-800 mb-1">Show / hide columns</div>
               {COLUMNS.map(col => (
                 <label key={col.id} className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/[0.04] text-xs text-gray-700 dark:text-gray-300">
-                  <input
-                    type="checkbox"
-                    checked={visibleCols.has(col.id)}
+                  <input type="checkbox" checked={visibleCols.has(col.id)} className="accent-red-500"
                     onChange={() => setVisibleCols(prev => {
-                      if (prev.size === 1 && prev.has(col.id)) return prev; // keep at least 1
-                      const s = new Set(prev);
-                      s.has(col.id) ? s.delete(col.id) : s.add(col.id);
-                      return s;
-                    })}
-                    className="accent-red-500"
-                  />
+                      if (prev.size === 1 && prev.has(col.id)) return prev;
+                      const s = new Set(prev); s.has(col.id) ? s.delete(col.id) : s.add(col.id); return s;
+                    })} />
                   {col.label}
                 </label>
               ))}
               <div className="border-t border-gray-100 dark:border-gray-800 mt-1 px-3 py-1.5">
-                <button
-                  onClick={() => setVisibleCols(new Set(COLUMNS.map(c => c.id)))}
-                  className="text-[11px] text-red-500 hover:text-red-600 dark:hover:text-red-400"
-                >
-                  Show all
-                </button>
+                <button onClick={() => setVisibleCols(new Set(COLUMNS.map(c => c.id)))} className="text-[11px] text-red-500 hover:text-red-600 dark:hover:text-red-400">Show all</button>
               </div>
             </div>
           )}
@@ -423,72 +483,87 @@ export default function App() {
 
         {loading && <span className="text-xs text-gray-400 dark:text-gray-500 animate-pulse">fetching…</span>}
 
-        {/* Search — right side */}
+        {/* Search — right, searches all text columns */}
         <div className="ml-auto flex items-center gap-3">
-          <span className="text-xs text-gray-400 dark:text-gray-600">
-            page {page + 1} of {totalPages || 1} · GraphQL + Realtime
-          </span>
-          <input
-            type="text"
-            placeholder="Search customer…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="bg-gray-50 dark:bg-[#111118] border border-gray-300 dark:border-gray-700 text-xs text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 px-3 py-1.5 rounded focus:outline-none focus:border-red-400 dark:focus:border-red-500 w-48"
-          />
+          <span className="text-xs text-gray-400 dark:text-gray-600">page {page + 1} of {totalPages || 1} · GraphQL + Realtime</span>
+          <div className="relative">
+            <input type="text" placeholder="Search all columns…" value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="bg-gray-50 dark:bg-[#111118] border border-gray-300 dark:border-gray-700 text-xs text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 pl-3 pr-7 py-1.5 rounded focus:outline-none focus:border-red-400 dark:focus:border-red-500 w-52" />
+            {search && (
+              <button onClick={() => setSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xs">✕</button>
+            )}
+          </div>
         </div>
+      </div>
+
+      {/* Group panel */}
+      <div
+        onDragOver={onPanelDragOver}
+        onDragLeave={onPanelDragLeave}
+        onDrop={onPanelDrop}
+        className={[
+          'px-6 py-2 border-b flex items-center gap-2 min-h-[38px] shrink-0 transition-colors',
+          panelDragOver
+            ? 'bg-red-50 dark:bg-red-900/10 border-red-300 dark:border-red-700'
+            : 'bg-gray-50/50 dark:bg-[#0a0a11] border-gray-200 dark:border-gray-800/50',
+        ].join(' ')}
+      >
+        {groupBy.length === 0 ? (
+          <span className="text-xs text-gray-400 dark:text-gray-600 italic select-none">
+            {panelDragOver ? 'Drop here to group by this column' : 'Drag a column header here to group rows'}
+          </span>
+        ) : (
+          <>
+            <span className="text-[10px] text-gray-400 dark:text-gray-600 uppercase tracking-wider mr-1">Group by</span>
+            {groupBy.map((colId, i) => (
+              <React.Fragment key={colId}>
+                {i > 0 && <span className="text-gray-300 dark:text-gray-700 text-xs">›</span>}
+                <span className="flex items-center gap-1 px-2 py-0.5 text-xs rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800">
+                  {COL_MAP[colId]?.label ?? colId}
+                  <button onClick={() => removeGroup(colId)} className="ml-0.5 hover:text-red-900 dark:hover:text-red-100 leading-none">×</button>
+                </span>
+              </React.Fragment>
+            ))}
+            <button onClick={() => { setGroupBy([]); setCollapsed(new Set()); }}
+              className="ml-2 text-[11px] text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300">
+              Clear all
+            </button>
+          </>
+        )}
       </div>
 
       {/* Table */}
       <div className="flex-1 overflow-auto">
         <table className="text-xs" style={{ tableLayout: 'fixed', width: tableWidth, minWidth: '100%' }}>
-          <colgroup>
-            {activeCols.map(col => <col key={col.id} style={{ width: colWidths[col.id] }} />)}
-          </colgroup>
+          <colgroup>{activeCols.map(col => <col key={col.id} style={{ width: colWidths[col.id] }} />)}</colgroup>
           <thead className="sticky top-0 z-10">
             <tr className="bg-gray-100 dark:bg-[#0e0e18] border-b border-gray-200 dark:border-gray-800">
               {activeCols.map(col => {
                 const isDragOver = dragOverColId === col.id && dragColId !== col.id;
                 const isDragging = dragColId === col.id;
                 return (
-                  <th
-                    key={col.id}
-                    draggable
-                    onDragStart={e => onDragStart(e, col.id)}
-                    onDragOver={e => onDragOver(e, col.id)}
-                    onDrop={e => onDrop(e, col.id)}
-                    onDragEnd={onDragEnd}
+                  <th key={col.id} draggable
+                    onDragStart={e => onColDragStart(e, col.id)}
+                    onDragOver={e => onColDragOver(e, col.id)}
+                    onDrop={e => onColDrop(e, col.id)}
+                    onDragEnd={onColDragEnd}
+                    style={{ width: colWidths[col.id] }}
                     className={[
                       'relative px-3 py-2.5 font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap select-none overflow-hidden',
                       col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left',
                       isDragging ? 'opacity-40' : '',
                       isDragOver ? 'bg-red-50 dark:bg-red-900/20' : '',
-                    ].join(' ')}
-                    style={{ width: colWidths[col.id] }}
-                  >
-                    {/* Drop indicator */}
-                    {isDragOver && (
-                      <div className="absolute left-0 top-0 h-full w-0.5 bg-red-500" />
-                    )}
-
-                    {/* Label + sort */}
-                    <span
-                      onClick={col.sortable ? () => handleSort(col.id) : undefined}
-                      className={[
-                        'inline-flex items-center gap-0.5 cursor-grab active:cursor-grabbing',
-                        col.sortable ? 'hover:text-gray-900 dark:hover:text-white' : '',
-                      ].join(' ')}
-                      title="Drag to reorder"
-                    >
-                      {col.label}
-                      {col.sortable && sortIcon(col.id)}
+                    ].join(' ')}>
+                    {isDragOver && <div className="absolute left-0 top-0 h-full w-0.5 bg-red-500" />}
+                    <span onClick={col.sortable ? () => handleSort(col.id) : undefined}
+                      className={['inline-flex items-center gap-0.5 cursor-grab active:cursor-grabbing', col.sortable ? 'hover:text-gray-900 dark:hover:text-white' : ''].join(' ')}
+                      title="Drag to reorder or to group panel">
+                      {col.label}{col.sortable && sortIcon(col.id)}
                     </span>
-
-                    {/* Resize handle */}
-                    <div
-                      className="absolute right-0 top-0 h-full w-3 flex items-center justify-center cursor-col-resize group z-10"
-                      onMouseDown={e => startResize(e, col.id)}
-                      onClick={e => e.stopPropagation()}
-                    >
+                    <div className="absolute right-0 top-0 h-full w-3 flex items-center justify-center cursor-col-resize group z-10"
+                      onMouseDown={e => startResize(e, col.id)} onClick={e => e.stopPropagation()}>
                       <div className="w-px h-4 bg-gray-300 dark:bg-gray-700 group-hover:bg-red-400 group-hover:h-full" />
                     </div>
                   </th>
@@ -497,7 +572,26 @@ export default function App() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, idx) => {
+            {displayRows.map((drow, i) => {
+              if (drow.type === 'group') {
+                const isCollapsed = collapsed.has(drow.key);
+                return (
+                  <tr key={`g-${drow.key}`}
+                    className="bg-gray-100/80 dark:bg-[#111118] border-y border-gray-200 dark:border-gray-800/60 cursor-pointer select-none"
+                    onClick={() => toggleCollapse(drow.key)}>
+                    <td colSpan={activeCols.length} className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-500 dark:text-gray-400">{isCollapsed ? <ChevronRight /> : <ChevronDown />}</span>
+                        <span className="text-[10px] text-gray-400 dark:text-gray-600 uppercase tracking-wider">{COL_MAP[drow.colId]?.label}</span>
+                        <span className="font-medium text-gray-800 dark:text-gray-200">{hl(drow.value, term)}</span>
+                        <span className="text-[11px] text-gray-400 dark:text-gray-600 ml-1">({drow.count} row{drow.count !== 1 ? 's' : ''})</span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              }
+
+              const { row, idx } = drow;
               const isFlashing = liveFlash.has(row.transaction_id);
               const isEven = idx % 2 === 0;
               return (
@@ -512,12 +606,8 @@ export default function App() {
                 </tr>
               );
             })}
-            {!loading && rows.length === 0 && (
-              <tr>
-                <td colSpan={activeCols.length} className="px-4 py-12 text-center text-gray-400 dark:text-gray-600">
-                  No orders match the current filters.
-                </td>
-              </tr>
+            {!loading && displayRows.length === 0 && (
+              <tr><td colSpan={activeCols.length} className="px-4 py-12 text-center text-gray-400 dark:text-gray-600">No orders match the current filters.</td></tr>
             )}
           </tbody>
         </table>
@@ -530,12 +620,9 @@ export default function App() {
           <div className="flex gap-1">
             {PAGE_SIZE_PRESETS.map(n => (
               <button key={n} onClick={() => setPageSize(n)}
-                className={[
-                  'px-2 py-1 text-xs rounded',
-                  n === pageSize
-                    ? 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-300 border border-red-300 dark:border-red-800/50'
-                    : 'text-gray-500 border border-gray-200 dark:border-gray-800 hover:text-gray-900 dark:hover:text-white hover:border-gray-400 dark:hover:border-gray-600',
-                ].join(' ')}>
+                className={['px-2 py-1 text-xs rounded', n === pageSize
+                  ? 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-300 border border-red-300 dark:border-red-800/50'
+                  : 'text-gray-500 border border-gray-200 dark:border-gray-800 hover:text-gray-900 dark:hover:text-white hover:border-gray-400 dark:hover:border-gray-600'].join(' ')}>
                 {n}
               </button>
             ))}
@@ -546,29 +633,25 @@ export default function App() {
             onKeyDown={e => { if (e.key === 'Enter') { const n = parseInt(pageSizeInput, 10); if (!isNaN(n)) setPageSize(n); else setPSInput(String(pageSize)); (e.target as HTMLInputElement).blur(); } }}
             className="w-14 bg-gray-50 dark:bg-[#111118] border border-gray-300 dark:border-gray-700 text-xs text-gray-900 dark:text-white px-2 py-1 rounded focus:outline-none focus:border-red-400 dark:focus:border-red-500 text-center" />
         </div>
-
         <div className="ml-auto flex items-center gap-2">
           <span className="text-xs text-gray-500 whitespace-nowrap mr-1">
             {totalCount === 0 ? '0' : (page * pageSize + 1).toLocaleString()}–{Math.min((page + 1) * pageSize, totalCount).toLocaleString()} of {totalCount.toLocaleString()}
           </span>
           {[
-            { label: '«', act: () => setPage(0),                                dis: page === 0 },
-            { label: '‹', act: () => setPage(p => Math.max(0, p - 1)),          dis: page === 0 },
-          ].map(b => <button key={b.label} onClick={b.act} disabled={b.dis} className="px-2 py-1 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed">{b.label}</button>)}
-
+            { l: '«', a: () => setPage(0),                                d: page === 0 },
+            { l: '‹', a: () => setPage(p => Math.max(0, p - 1)),          d: page === 0 },
+          ].map(b => <button key={b.l} onClick={b.a} disabled={b.d} className="px-2 py-1 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed">{b.l}</button>)}
           {pageButtons().map((p, i) =>
-            p === '...'
-              ? <span key={`e${i}`} className="px-1 text-gray-400 dark:text-gray-600 text-xs">…</span>
-              : <button key={p} onClick={() => setPage(p as number)}
-                  className={['px-2.5 py-1 text-xs rounded', p === page ? 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-300 border border-red-300 dark:border-red-800/50' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'].join(' ')}>
-                  {(p as number) + 1}
-                </button>
+            p === '...' ? <span key={`e${i}`} className="px-1 text-gray-400 dark:text-gray-600 text-xs">…</span>
+            : <button key={p} onClick={() => setPage(p as number)}
+                className={['px-2.5 py-1 text-xs rounded', p === page ? 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-300 border border-red-300 dark:border-red-800/50' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'].join(' ')}>
+                {(p as number) + 1}
+              </button>
           )}
-
           {[
-            { label: '›', act: () => setPage(p => Math.min(totalPages - 1, p + 1)), dis: page >= totalPages - 1 },
-            { label: '»', act: () => setPage(totalPages - 1),                        dis: page >= totalPages - 1 },
-          ].map(b => <button key={b.label} onClick={b.act} disabled={b.dis} className="px-2 py-1 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed">{b.label}</button>)}
+            { l: '›', a: () => setPage(p => Math.min(totalPages - 1, p + 1)), d: page >= totalPages - 1 },
+            { l: '»', a: () => setPage(totalPages - 1),                        d: page >= totalPages - 1 },
+          ].map(b => <button key={b.l} onClick={b.a} disabled={b.d} className="px-2 py-1 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed">{b.l}</button>)}
         </div>
       </div>
     </div>
