@@ -9,6 +9,9 @@
   },
   "dependencies": {
     "@spite/core": "*",
+    "@supabase/supabase-js": "^2.98.0",
+    "graphql": "^16.13.1",
+    "graphql-request": "^7.4.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
