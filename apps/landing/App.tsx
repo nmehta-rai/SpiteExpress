@@ -321,14 +321,19 @@ export default function App() {
             </tr>
           </thead>
           <tbody>
-            {rows.map(row => {
+            {rows.map((row, idx) => {
               const isFlashing = liveFlash.has(row.transaction_id);
+              const isEven = idx % 2 === 0;
               return (
                 <tr
                   key={row.transaction_id}
                   className={[
-                    'border-b border-gray-100 dark:border-gray-800/40 hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors',
-                    isFlashing ? 'bg-green-50 dark:bg-green-900/20' : 'bg-white dark:bg-transparent',
+                    'hover:brightness-95 dark:hover:brightness-125',
+                    isFlashing
+                      ? 'bg-green-50 dark:bg-green-900/20'
+                      : isEven
+                        ? 'bg-white dark:bg-[#0d0d14]'
+                        : 'bg-gray-50/70 dark:bg-[#0a0a11]',
                   ].join(' ')}
                 >
                   <td className="px-3 py-2 text-gray-800 dark:text-gray-200">{row.customer_name}</td>
