@@ -96,8 +96,21 @@ function MoonIcon() {
 export default function App() {
   const [dark, setDark] = useState(() => {
     const saved = localStorage.getItem('se-theme');
-    return saved ? saved === 'dark' : true; // default dark
+    const isDark = saved ? saved === 'dark' : true; // default dark
+    // Set immediately so first render has correct class (avoids flash)
+    if (isDark) document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+    return isDark;
   });
+
+  // Apply/remove dark class on <html> so Tailwind dark: variants resolve correctly
+  useEffect(() => {
+    if (dark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [dark]);
 
   const [rows, setRows]           = useState<Order[]>([]);
   const [totalCount, setTotal]    = useState(0);
@@ -231,7 +244,7 @@ export default function App() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className={`${dark ? 'dark' : ''} min-h-screen bg-gray-50 dark:bg-[#08080f] text-gray-900 dark:text-white font-mono flex flex-col transition-colors duration-200`}>
+    <div className="min-h-screen bg-gray-50 dark:bg-[#08080f] text-gray-900 dark:text-white font-mono flex flex-col transition-colors duration-200">
 
       {/* Header */}
       <div className="border-b border-red-200 dark:border-red-900/30 bg-white dark:bg-[#08080f] px-6 py-4 flex items-center justify-between shrink-0">
