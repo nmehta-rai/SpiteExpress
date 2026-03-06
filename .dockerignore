@@ -1,8 +1,6 @@
 node_modules
-apps/web
-apps/docs
-apps/demo
-packages
+apps/*/node_modules
+packages/*/node_modules
 .git
 .claude
 *.md
