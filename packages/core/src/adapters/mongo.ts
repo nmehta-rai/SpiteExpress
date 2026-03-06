@@ -1,20 +1,4 @@
-export interface GridFilter {
-  field: string;
-  operator: 'equals' | 'contains' | 'startsWith' | 'endsWith' | 'gt' | 'lt' | 'gte' | 'lte' | 'in';
-  value: any;
-}
-
-export interface GridSort {
-  field: string;
-  desc: boolean;
-}
-
-export interface GridState {
-  page: number;
-  pageSize: number;
-  filters: GridFilter[];
-  sorts: GridSort[];
-}
+import type { GridFilter, GridSort, GridState } from './prisma';
 
 /**
  * Translates SpiteExpress GridState into MongoDB/Mongoose query parameters.
@@ -32,28 +16,28 @@ export function translateToMongo(state: GridState) {
         query[field] = value;
         break;
       case 'contains':
-        query[field] = { : value, : 'i' };
+        query[field] = { $regex: value, $options: 'i' };
         break;
       case 'startsWith':
-        query[field] = { : '^' + value, : 'i' };
+        query[field] = { $regex: '^' + value, $options: 'i' };
         break;
       case 'endsWith':
-        query[field] = { : value + '$', : 'i' };
+        query[field] = { $regex: value + '$', $options: 'i' };
         break;
       case 'gt':
-        query[field] = { : value };
+        query[field] = { $gt: value };
         break;
       case 'lt':
-        query[field] = { : value };
+        query[field] = { $lt: value };
         break;
       case 'gte':
-        query[field] = { : value };
+        query[field] = { $gte: value };
         break;
       case 'lte':
-        query[field] = { : value };
+        query[field] = { $lte: value };
         break;
       case 'in':
-        query[field] = { : value };
+        query[field] = { $in: value };
         break;
     }
   });

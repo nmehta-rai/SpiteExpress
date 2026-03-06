@@ -1,8 +1,4 @@
-export type SpiteGridState = {
-  sorting: Array<{ id: string; desc: boolean }>;
-  filtering: Array<{ id: string; value: any }>;
-  pagination: { pageIndex: number; pageSize: number };
-};
+import type { SpiteGridState } from '../useSpiteGrid';
 
 export type SpiteRemoteRequest = {
   sort: Array<{ field: string; direction: 'asc' | 'desc' }>;
@@ -11,7 +7,7 @@ export type SpiteRemoteRequest = {
   take: number;
 };
 
-export const createRemoteAdapter = (state: SpiteGridState): SpiteRemoteRequest => {
+export const buildRemoteRequest = (state: SpiteGridState): SpiteRemoteRequest => {
   return {
     sort: state.sorting.map((s) => ({ field: s.id, direction: s.desc ? 'desc' : 'asc' })),
     filter: state.filtering.reduce((acc, f) => ({ ...acc, [f.id]: f.value }), {}),
