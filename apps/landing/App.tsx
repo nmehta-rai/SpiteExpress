@@ -4,7 +4,7 @@ import { supabase } from './src/lib/supabase';
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE_PRESETS = [10, 15, 25, 50];
 
 const COLUMNS: Array<{
   id: keyof Order;
@@ -69,6 +69,8 @@ export default function App() {
   const [rows, setRows]           = useState<Order[]>([]);
   const [totalCount, setTotal]    = useState(0);
   const [page, setPage]           = useState(0);
+  const [pageSize, setPageSizeRaw] = useState(50);
+  const [pageSizeInput, setPageSizeInput] = useState('50');
   const [loading, setLoading]     = useState(true);
   const [search, setSearch]       = useState('');
   const [statusFilter, setStatus] = useState('');
@@ -76,6 +78,13 @@ export default function App() {
   const [sortDir, setSortDir]     = useState<SortDirection>('DescNullsLast');
   const [liveFlash, setFlash]     = useState<Set<string>>(new Set());
   const [liveCount, setLiveCount] = useState(0);
+
+  const setPageSize = (n: number) => {
+    const clamped = Math.min(500, Math.max(1, n));
+    setPageSizeRaw(clamped);
+    setPageSizeInput(String(clamped));
+    setPage(0);
+  };
 
   const debouncedSearch = useDebounce(search, 350);
 
@@ -93,8 +102,8 @@ export default function App() {
       }
 
       const vars = {
-        first:   PAGE_SIZE,
-        offset:  page * PAGE_SIZE,
+        first:   pageSize,
+        offset:  page * pageSize,
         orderBy: [{ [sortCol]: sortDir }],
         ...(Object.keys(filter).length ? { filter } : {}),
       };
@@ -105,12 +114,12 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [page, debouncedSearch, statusFilter, sortCol, sortDir]);
+  }, [page, pageSize, debouncedSearch, statusFilter, sortCol, sortDir]);
 
   useEffect(() => { fetchPage(); }, [fetchPage]);
 
   // Reset to page 0 when filters/sort change
-  useEffect(() => { setPage(0); }, [debouncedSearch, statusFilter, sortCol, sortDir]);
+  useEffect(() => { setPage(0); }, [debouncedSearch, statusFilter, sortCol, sortDir, pageSize]);
 
   // ── Supabase Realtime ──────────────────────────────────────────────────────
 
@@ -178,7 +187,7 @@ export default function App() {
 
   // ── Pagination ─────────────────────────────────────────────────────────────
 
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  const totalPages = Math.ceil(totalCount / pageSize);
 
   const pageButtons = () => {
     const pages: (number | '...')[] = [];
@@ -239,7 +248,7 @@ export default function App() {
         </select>
         {loading && <span className="text-xs text-gray-500 animate-pulse">fetching...</span>}
         <span className="ml-auto text-xs text-gray-600">
-          page {page + 1} of {totalPages || 1} · {PAGE_SIZE} rows/page · GraphQL + Realtime
+          page {page + 1} of {totalPages || 1} · GraphQL + Realtime
         </span>
       </div>
 
@@ -362,59 +371,85 @@ export default function App() {
       </div>
 
       {/* Pagination */}
-      <div className="border-t border-gray-800/50 px-6 py-3 flex items-center gap-2 shrink-0">
-        <button
-          onClick={() => setPage(0)}
-          disabled={page === 0}
-          className="px-2 py-1 text-xs text-gray-500 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          «
-        </button>
-        <button
-          onClick={() => setPage(p => Math.max(0, p - 1))}
-          disabled={page === 0}
-          className="px-2 py-1 text-xs text-gray-500 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          ‹
-        </button>
+      <div className="border-t border-gray-800/50 px-6 py-3 flex items-center gap-4 shrink-0">
 
-        {pageButtons().map((p, i) =>
-          p === '...'
-            ? <span key={`ellipsis-${i}`} className="px-1 text-gray-600 text-xs">…</span>
-            : (
+        {/* Left: page size */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 whitespace-nowrap">Rows per page</span>
+          <div className="flex gap-1">
+            {PAGE_SIZE_PRESETS.map(n => (
               <button
-                key={p}
-                onClick={() => setPage(p as number)}
+                key={n}
+                onClick={() => setPageSize(n)}
                 className={[
-                  'px-2.5 py-1 text-xs rounded transition-colors',
-                  p === page
+                  'px-2 py-1 text-xs rounded transition-colors',
+                  n === pageSize
                     ? 'bg-red-900/50 text-red-300 border border-red-800/50'
-                    : 'text-gray-500 hover:text-white',
+                    : 'text-gray-500 border border-gray-800 hover:text-white hover:border-gray-600',
                 ].join(' ')}
               >
-                {(p as number) + 1}
+                {n}
               </button>
-            )
-        )}
+            ))}
+          </div>
+          <input
+            type="number"
+            min={1}
+            max={500}
+            value={pageSizeInput}
+            onChange={e => setPageSizeInput(e.target.value)}
+            onBlur={() => {
+              const n = parseInt(pageSizeInput, 10);
+              if (!isNaN(n)) setPageSize(n);
+              else setPageSizeInput(String(pageSize));
+            }}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                const n = parseInt(pageSizeInput, 10);
+                if (!isNaN(n)) setPageSize(n);
+                else setPageSizeInput(String(pageSize));
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+            className="w-14 bg-[#111118] border border-gray-700 text-xs text-white px-2 py-1 rounded focus:outline-none focus:border-red-500 text-center"
+          />
+        </div>
 
-        <button
-          onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-          disabled={page >= totalPages - 1}
-          className="px-2 py-1 text-xs text-gray-500 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          ›
-        </button>
-        <button
-          onClick={() => setPage(totalPages - 1)}
-          disabled={page >= totalPages - 1}
-          className="px-2 py-1 text-xs text-gray-500 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          »
-        </button>
+        {/* Right: row range + page nav */}
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-xs text-gray-500 whitespace-nowrap mr-1">
+            {totalCount === 0 ? '0' : (page * pageSize + 1).toLocaleString()}–{Math.min((page + 1) * pageSize, totalCount).toLocaleString()} of {totalCount.toLocaleString()}
+          </span>
 
-        <span className="ml-auto text-xs text-gray-600">
-          {(page * PAGE_SIZE + 1).toLocaleString()}–{Math.min((page + 1) * PAGE_SIZE, totalCount).toLocaleString()} of {totalCount.toLocaleString()}
-        </span>
+          <button onClick={() => setPage(0)} disabled={page === 0}
+            className="px-2 py-1 text-xs text-gray-500 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed">«</button>
+          <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
+            className="px-2 py-1 text-xs text-gray-500 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed">‹</button>
+
+          {pageButtons().map((p, i) =>
+            p === '...'
+              ? <span key={`ellipsis-${i}`} className="px-1 text-gray-600 text-xs">…</span>
+              : (
+                <button
+                  key={p}
+                  onClick={() => setPage(p as number)}
+                  className={[
+                    'px-2.5 py-1 text-xs rounded transition-colors',
+                    p === page
+                      ? 'bg-red-900/50 text-red-300 border border-red-800/50'
+                      : 'text-gray-500 hover:text-white',
+                  ].join(' ')}
+                >
+                  {(p as number) + 1}
+                </button>
+              )
+          )}
+
+          <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
+            className="px-2 py-1 text-xs text-gray-500 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed">›</button>
+          <button onClick={() => setPage(totalPages - 1)} disabled={page >= totalPages - 1}
+            className="px-2 py-1 text-xs text-gray-500 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed">»</button>
+        </div>
       </div>
     </div>
   );
